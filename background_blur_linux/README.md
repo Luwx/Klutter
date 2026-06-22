@@ -1,24 +1,23 @@
-# kwin_blur
+# background_blur_linux
 
-A Flutter plugin that adds the KWin background blur effect to your Linux app window. Works on both X11 and Wayland. KDE Plasma only.
+A Flutter plugin that adds blur effect to the Linux app window. Wayland only.
 
 ## Requirements
 
-- KDE Plasma (5 or 6) with KWin
 - "Background Blur" effect enabled in System Settings > Desktop Effects
 - Flutter >= 3.3
 
 Build dependencies:
 
-Fedora: `sudo dnf install wayland-devel libX11-devel gtk3-devel`  
-Debian/Ubuntu: `sudo apt install libwayland-dev libx11-dev libgtk-3-dev`
+Fedora: `sudo dnf install wayland-devel gtk3-devel`  
+Debian/Ubuntu: `sudo apt install libwayland-dev libgtk-3-dev`
 
 ## Installation
 
 ```yaml
 dependencies:
-  kwin_blur:
-    path: ../kwin_blur
+  background_blur_linux:
+    path: ../background_blur_linux
 ```
 
 ## Setup
@@ -117,26 +116,26 @@ Scaffold(
 Call `enable()` after the first frame. The window must be visible before you call it.
 
 ```dart
-import 'package:kwin_blur/kwin_blur.dart';
+import 'package:background_blur_linux/background_blur_linux.dart';
 
 // Blur the whole window
-await KwinBlur.enable();
+await BackgroundBlurLinux.enable();
 
 // Blur specific regions (in pixels)
-await KwinBlur.enable(region: [
+await BackgroundBlurLinux.enable(region: [
   const BlurRect(0, 0, 300, 60),
   const BlurRect(0, 540, 300, 60),
 ]);
 
 // Disable blur
-await KwinBlur.disable();
+await BackgroundBlurLinux.disable();
 ```
 
 ### Rounded corners
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:kwin_blur/kwin_blur.dart';
+import 'package:background_blur_linux/background_blur_linux.dart';
 
 Future<void> applyRoundedBlur() async {
   final view = WidgetsBinding.instance.platformDispatcher.views.first;
@@ -145,7 +144,7 @@ Future<void> applyRoundedBlur() async {
   final h = (view.physicalSize.height / dpr).round();
 
   final region = blurRegionForRoundedRect(w, h, BorderRadius.circular(12));
-  await KwinBlur.enable(region: region);
+  await BackgroundBlurLinux.enable(region: region);
 }
 ```
 
@@ -153,7 +152,9 @@ Future<void> applyRoundedBlur() async {
 
 ### Window resize
 
-The blur region is not updated automatically on resize. Re-apply it when the window size changes:
+Whole-window blur (no region, or an empty region) tracks the window size
+automatically. An explicit region is a snapshot in window-local coordinates and
+is not rescaled, so re-apply it when the window size changes:
 
 ```dart
 WidgetsBinding.instance.platformDispatcher.onMetricsChanged = () {
@@ -163,14 +164,14 @@ WidgetsBinding.instance.platformDispatcher.onMetricsChanged = () {
 
 ## API
 
-**`KwinBlur.enable({List<BlurRect>? region})`**  
+**`BackgroundBlurLinux.enable({List<BlurRect>? region})`**  
 Enables blur. If region is null or empty, blurs the whole window. Throws if the blur effect is disabled in System Settings.
 
-**`KwinBlur.disable()`**  
+**`BackgroundBlurLinux.disable()`**  
 Removes the blur.
 
 **`BlurRect(int x, int y, int width, int height)`**  
-A rectangle in window pixels. On Wayland use logical pixels (`physicalSize / devicePixelRatio`). On X11 use physical pixels (`physicalSize`).
+A rectangle in window-local **logical pixels** (`physicalSize / devicePixelRatio`), the surface-local space KWin expects on Wayland.
 
 **`blurRegionForRoundedRect(int width, int height, BorderRadius borderRadius)`**  
 Returns a list of `BlurRect` that forms a rounded rectangle.

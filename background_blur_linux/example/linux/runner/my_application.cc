@@ -28,7 +28,7 @@ static void my_application_activate(GApplication* application) {
   // the window manager draws the title bar and the window frame.
   // On X11 the window manager always owns decorations, so no special handling
   // is needed.
-  gtk_window_set_title(window, "kwin_blur_example");
+  gtk_window_set_title(window, "background_blur_linux_example");
 
   gtk_window_set_default_size(window, 800, 600);
 

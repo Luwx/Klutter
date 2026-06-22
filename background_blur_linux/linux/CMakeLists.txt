@@ -4,19 +4,17 @@
 cmake_minimum_required(VERSION 3.10)
 
 # Project-level configuration.
-set(PROJECT_NAME "kwin_blur")
+set(PROJECT_NAME "background_blur_linux")
 project(${PROJECT_NAME} LANGUAGES C CXX)
 
 # This value is used when generating builds using this plugin, so it must
 # not be changed.
-set(PLUGIN_NAME "kwin_blur_plugin")
+set(PLUGIN_NAME "background_blur_linux_plugin")
 
 # --- Dependencies ---
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
-pkg_check_modules(X11_DEP       REQUIRED IMPORTED_TARGET x11)
 pkg_check_modules(GDK_WAYLAND   REQUIRED IMPORTED_TARGET gdk-wayland-3.0)
-pkg_check_modules(GDK_X11       REQUIRED IMPORTED_TARGET gdk-x11-3.0)
 
 # --- wayland-scanner code generation ---
 # Prefer the location reported by wayland-scanner's pkg-config; fall back to
@@ -29,6 +27,8 @@ if(NOT WAYLAND_SCANNER_EXEC)
   message(FATAL_ERROR "wayland-scanner not found; install the wayland-devel package")
 endif()
 
+# Legacy KDE blur protocol (org_kde_kwin_blur), used as a fallback on KWin
+# versions older than Plasma 6.7.
 set(BLUR_PROTOCOL_XML "${CMAKE_CURRENT_SOURCE_DIR}/blur-protocol.xml")
 set(BLUR_PROTOCOL_C   "${CMAKE_CURRENT_BINARY_DIR}/blur-protocol.c")
 set(BLUR_PROTOCOL_H   "${CMAKE_CURRENT_BINARY_DIR}/blur-protocol.h")
@@ -50,13 +50,37 @@ add_custom_command(
   VERBATIM
 )
 
+# Standardized background effect protocol (ext_background_effect_v1),
+# preferred when the compositor advertises it (KWin >= Plasma 6.7).
+set(EXT_BG_PROTOCOL_XML "${CMAKE_CURRENT_SOURCE_DIR}/ext-background-effect-v1.xml")
+set(EXT_BG_PROTOCOL_C   "${CMAKE_CURRENT_BINARY_DIR}/ext-background-effect-v1-protocol.c")
+set(EXT_BG_PROTOCOL_H   "${CMAKE_CURRENT_BINARY_DIR}/ext-background-effect-v1-protocol.h")
+
+add_custom_command(
+  OUTPUT  "${EXT_BG_PROTOCOL_H}"
+  COMMAND "${WAYLAND_SCANNER_EXEC}" client-header
+          "${EXT_BG_PROTOCOL_XML}" "${EXT_BG_PROTOCOL_H}"
+  DEPENDS "${EXT_BG_PROTOCOL_XML}"
+  COMMENT "wayland-scanner: client-header ext-background-effect-v1-protocol.h"
+  VERBATIM
+)
+add_custom_command(
+  OUTPUT  "${EXT_BG_PROTOCOL_C}"
+  COMMAND "${WAYLAND_SCANNER_EXEC}" private-code
+          "${EXT_BG_PROTOCOL_XML}" "${EXT_BG_PROTOCOL_C}"
+  DEPENDS "${EXT_BG_PROTOCOL_XML}" "${EXT_BG_PROTOCOL_H}"
+  COMMENT "wayland-scanner: private-code ext-background-effect-v1-protocol.c"
+  VERBATIM
+)
+
 # Any new source files that you add to the plugin should be added here.
 list(APPEND PLUGIN_SOURCES
-  "kwin_blur_plugin.cc"
-  "kwin_blur_wayland.c"
-  "kwin_blur_x11.c"
+  "background_blur_linux_plugin.cc"
+  "background_blur_linux_wayland.c"
   "${BLUR_PROTOCOL_C}"
   "${BLUR_PROTOCOL_H}"
+  "${EXT_BG_PROTOCOL_C}"
+  "${EXT_BG_PROTOCOL_H}"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment
@@ -89,14 +113,12 @@ target_include_directories(${PLUGIN_NAME} PRIVATE
 target_link_libraries(${PLUGIN_NAME} PRIVATE flutter)
 target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::GTK)
 target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::WAYLAND_CLIENT)
-target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::X11_DEP)
 target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::GDK_WAYLAND)
-target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::GDK_X11)
 
 # List of absolute paths to libraries that should be bundled with the plugin.
 # This list could contain prebuilt libraries, or libraries created by an
 # external build triggered from this build file.
-set(kwin_blur_bundled_libraries
+set(background_blur_linux_bundled_libraries
   ""
   PARENT_SCOPE
 )
