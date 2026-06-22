@@ -1,27 +1,25 @@
-#include "include/kwin_blur/kwin_blur_plugin.h"
+#include "include/background_blur_linux/background_blur_linux_plugin.h"
 
 #include <flutter_linux/flutter_linux.h>
 #include <gtk/gtk.h>
 
-#include <cstdlib>
 #include <cstring>
 #include <vector>
 
-#include "kwin_blur_private.h"
+#include "background_blur_linux_private.h"
 
-#define KWIN_BLUR_PLUGIN(obj)                                     \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj), kwin_blur_plugin_get_type(), \
-                              KwinBlurPlugin))
+#define BACKGROUND_BLUR_LINUX_PLUGIN(obj)                                     \
+  (G_TYPE_CHECK_INSTANCE_CAST((obj), background_blur_linux_plugin_get_type(), \
+                              BackgroundBlurLinuxPlugin))
 
-struct _KwinBlurPlugin {
+struct _BackgroundBlurLinuxPlugin {
   GObject parent_instance;
   FlPluginRegistrar* registrar;  // strong ref (released in dispose)
-  gboolean is_wayland;
 };
 
-G_DEFINE_TYPE(KwinBlurPlugin, kwin_blur_plugin, g_object_get_type())
+G_DEFINE_TYPE(BackgroundBlurLinuxPlugin, background_blur_linux_plugin, g_object_get_type())
 
-static GtkWindow* get_window(KwinBlurPlugin* self) {
+static GtkWindow* get_window(BackgroundBlurLinuxPlugin* self) {
   FlView* view = fl_plugin_registrar_get_view(self->registrar);
   if (view == nullptr) {
     return nullptr;
@@ -36,7 +34,7 @@ static GtkWindow* get_window(KwinBlurPlugin* self) {
 // Pulls a list of {x,y,w,h} maps from a Flutter argument value.
 // Returns true on success and fills `out_rects`. If the argument is
 // missing/null/empty, returns true with an empty vector.
-static gboolean parse_rects(FlValue* args, std::vector<KwinBlurRect>* out_rects,
+static gboolean parse_rects(FlValue* args, std::vector<BackgroundBlurLinuxRect>* out_rects,
                             gchar** out_error) {
   out_rects->clear();
   if (args == nullptr || fl_value_get_type(args) == FL_VALUE_TYPE_NULL) {
@@ -62,7 +60,7 @@ static gboolean parse_rects(FlValue* args, std::vector<KwinBlurRect>* out_rects,
       *out_error = g_strdup("error:invalid_rect");
       return FALSE;
     }
-    KwinBlurRect r;
+    BackgroundBlurLinuxRect r;
     r.x = static_cast<int32_t>(fl_value_get_int(xv));
     r.y = static_cast<int32_t>(fl_value_get_int(yv));
     r.width = static_cast<int32_t>(fl_value_get_int(wv));
@@ -78,8 +76,8 @@ static FlMethodResponse* respond_string(gchar* str_owned) {
   return FL_METHOD_RESPONSE(fl_method_success_response_new(v));
 }
 
-static FlMethodResponse* handle_enable(KwinBlurPlugin* self, FlValue* args) {
-  std::vector<KwinBlurRect> rects;
+static FlMethodResponse* handle_enable(BackgroundBlurLinuxPlugin* self, FlValue* args) {
+  std::vector<BackgroundBlurLinuxRect> rects;
   gchar* err = nullptr;
   if (!parse_rects(args, &rects, &err)) {
     return respond_string(err);
@@ -90,25 +88,21 @@ static FlMethodResponse* handle_enable(KwinBlurPlugin* self, FlValue* args) {
     return respond_string(g_strdup("error:no_native_window"));
   }
 
-  gchar* result = self->is_wayland
-                      ? kwin_blur_wayland_enable(window, rects.data(),
-                                                rects.size())
-                      : kwin_blur_x11_enable(window, rects.data(),
-                                            rects.size());
+  gchar* result =
+      background_blur_linux_wayland_enable(window, rects.data(), rects.size());
   return respond_string(result);
 }
 
-static FlMethodResponse* handle_disable(KwinBlurPlugin* self) {
+static FlMethodResponse* handle_disable(BackgroundBlurLinuxPlugin* self) {
   GtkWindow* window = get_window(self);
   if (window == nullptr) {
     return respond_string(g_strdup("error:no_native_window"));
   }
-  gchar* result = self->is_wayland ? kwin_blur_wayland_disable(window)
-                                   : kwin_blur_x11_disable(window);
+  gchar* result = background_blur_linux_wayland_disable(window);
   return respond_string(result);
 }
 
-static void kwin_blur_plugin_handle_method_call(KwinBlurPlugin* self,
+static void background_blur_linux_plugin_handle_method_call(BackgroundBlurLinuxPlugin* self,
                                                FlMethodCall* method_call) {
   g_autoptr(FlMethodResponse) response = nullptr;
   const gchar* method = fl_method_call_get_name(method_call);
@@ -125,40 +119,37 @@ static void kwin_blur_plugin_handle_method_call(KwinBlurPlugin* self,
   fl_method_call_respond(method_call, response, nullptr);
 }
 
-static void kwin_blur_plugin_dispose(GObject* object) {
-  KwinBlurPlugin* self = KWIN_BLUR_PLUGIN(object);
+static void background_blur_linux_plugin_dispose(GObject* object) {
+  BackgroundBlurLinuxPlugin* self = BACKGROUND_BLUR_LINUX_PLUGIN(object);
   g_clear_object(&self->registrar);
-  G_OBJECT_CLASS(kwin_blur_plugin_parent_class)->dispose(object);
+  G_OBJECT_CLASS(background_blur_linux_plugin_parent_class)->dispose(object);
 }
 
-static void kwin_blur_plugin_class_init(KwinBlurPluginClass* klass) {
-  G_OBJECT_CLASS(klass)->dispose = kwin_blur_plugin_dispose;
+static void background_blur_linux_plugin_class_init(BackgroundBlurLinuxPluginClass* klass) {
+  G_OBJECT_CLASS(klass)->dispose = background_blur_linux_plugin_dispose;
 }
 
-static void kwin_blur_plugin_init(KwinBlurPlugin* self) {}
+static void background_blur_linux_plugin_init(BackgroundBlurLinuxPlugin* self) {}
 
 static void method_call_cb(FlMethodChannel* /*channel*/,
                            FlMethodCall* method_call, gpointer user_data) {
-  KwinBlurPlugin* plugin = KWIN_BLUR_PLUGIN(user_data);
-  kwin_blur_plugin_handle_method_call(plugin, method_call);
+  BackgroundBlurLinuxPlugin* plugin = BACKGROUND_BLUR_LINUX_PLUGIN(user_data);
+  background_blur_linux_plugin_handle_method_call(plugin, method_call);
 }
 
-void kwin_blur_plugin_register_with_registrar(FlPluginRegistrar* registrar) {
-  KwinBlurPlugin* plugin =
-      KWIN_BLUR_PLUGIN(g_object_new(kwin_blur_plugin_get_type(), nullptr));
+void background_blur_linux_plugin_register_with_registrar(FlPluginRegistrar* registrar) {
+  BackgroundBlurLinuxPlugin* plugin =
+      BACKGROUND_BLUR_LINUX_PLUGIN(g_object_new(background_blur_linux_plugin_get_type(), nullptr));
   // Keep the registrar alive for the lifetime of the plugin so that
   // fl_plugin_registrar_get_view() remains valid when method calls arrive.
   plugin->registrar = FL_PLUGIN_REGISTRAR(g_object_ref(registrar));
-  // Backend selection: prefer Wayland when WAYLAND_DISPLAY is present,
-  // matching how GTK itself chooses. This is evaluated once at plugin
-  // registration — the session backend never changes mid-process.
-  const char* wayland_display = std::getenv("WAYLAND_DISPLAY");
-  plugin->is_wayland = wayland_display != nullptr && wayland_display[0] != '\0';
+  // This plugin only supports Wayland. Under an X11 session the Wayland backend
+  // returns "error:not_wayland" from every call.
 
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
   g_autoptr(FlMethodChannel) channel =
       fl_method_channel_new(fl_plugin_registrar_get_messenger(registrar),
-                            "kwin_blur", FL_METHOD_CODEC(codec));
+                            "background_blur_linux", FL_METHOD_CODEC(codec));
   fl_method_channel_set_method_call_handler(
       channel, method_call_cb, g_object_ref(plugin), g_object_unref);
 

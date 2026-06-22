@@ -1,6 +1,6 @@
-name: kwin_blur
-description: "Flutter plugin that enables the KDE KWin compositor background blur effect on Linux (X11 and Wayland)."
-version: 0.0.1
+name: background_blur_linux
+description: "Flutter plugin that enables the KWin compositor background blur effect on Linux (Wayland)."
+version: 0.0.2
 homepage:
 
 environment:
@@ -34,7 +34,7 @@ flutter:
   plugin:
     platforms:
       linux:
-        pluginClass: KwinBlurPlugin
+        pluginClass: BackgroundBlurLinuxPlugin
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:

@@ -1,5 +1,5 @@
-#ifndef FLUTTER_PLUGIN_KWIN_BLUR_PRIVATE_H_
-#define FLUTTER_PLUGIN_KWIN_BLUR_PRIVATE_H_
+#ifndef FLUTTER_PLUGIN_BACKGROUND_BLUR_LINUX_PRIVATE_H_
+#define FLUTTER_PLUGIN_BACKGROUND_BLUR_LINUX_PRIVATE_H_
 
 #include <gtk/gtk.h>
 #include <stddef.h>
@@ -14,7 +14,7 @@ typedef struct {
   int32_t y;
   int32_t width;
   int32_t height;
-} KwinBlurRect;
+} BackgroundBlurLinuxRect;
 
 /*
  * All backend entry points share the same return-value convention:
@@ -24,18 +24,13 @@ typedef struct {
  * The caller is responsible for g_free'ing the result.
  */
 
-char* kwin_blur_wayland_enable(GtkWindow* window,
-                              const KwinBlurRect* rects,
+char* background_blur_linux_wayland_enable(GtkWindow* window,
+                              const BackgroundBlurLinuxRect* rects,
                               size_t n_rects);
-char* kwin_blur_wayland_disable(GtkWindow* window);
-
-char* kwin_blur_x11_enable(GtkWindow* window,
-                          const KwinBlurRect* rects,
-                          size_t n_rects);
-char* kwin_blur_x11_disable(GtkWindow* window);
+char* background_blur_linux_wayland_disable(GtkWindow* window);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif  // FLUTTER_PLUGIN_KWIN_BLUR_PRIVATE_H_
+#endif  // FLUTTER_PLUGIN_BACKGROUND_BLUR_LINUX_PRIVATE_H_

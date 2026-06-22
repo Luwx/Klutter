@@ -1,6 +1,6 @@
-# kde_blur_example
+# background_blur_linux_example
 
-Demonstrates how to use the kde_blur plugin.
+Demonstrates how to use the background_blur_linux plugin.
 
 ## Getting Started
 

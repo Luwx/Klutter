@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -14,30 +15,48 @@ class BlurRect {
   const BlurRect(this.x, this.y, this.width, this.height);
 
   Map<String, int> _toMap() => {'x': x, 'y': y, 'w': width, 'h': height};
+
+  @override
+  bool operator ==(Object other) =>
+      other is BlurRect &&
+      other.x == x &&
+      other.y == y &&
+      other.width == width &&
+      other.height == height;
+
+  @override
+  int get hashCode => Object.hash(x, y, width, height);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Low-level API
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Controls the KDE KWin compositor "blur behind" effect on Linux.
+/// Controls the compositor "blur behind" effect on Wayland.
+///
+/// This prefers the standardized `ext-background-effect-v1` protocol (KWin
+/// Plasma 6.7+), falling back to the legacy `org_kde_kwin_blur` protocol on
+/// older compositors. The active backend is chosen at runtime from the
+/// compositor's advertised capabilities. X11 is not supported.
 ///
 /// The window must already be transparent for blur to be visible.
-/// This plugin only sets the KWin hint; it does not change window opacity.
-class KwinBlur {
-  static const MethodChannel _channel = MethodChannel('kwin_blur');
+/// This plugin only requests the blur region; it does not change window opacity.
+class BackgroundBlurLinux {
+  static const MethodChannel _channel = MethodChannel('background_blur_linux');
 
-  /// Enables KWin blur for the application window.
+  /// Enables blur for the application window.
   ///
-  /// If [region] is null or empty the whole window is blurred.
-  /// Otherwise each [BlurRect] defines an area to blur.
+  /// If [region] is null or empty the whole window is blurred and tracks the
+  /// window size across resizes. An explicit region is a snapshot and must be
+  /// re-set after a resize.
   ///
-  /// On Wayland coordinates are in **logical pixels**;
-  /// on X11 they are in **physical pixels**.
+  /// Coordinates are in **logical pixels** (surface-local), the space KWin
+  /// expects on Wayland.
   /// Use [blurRegionForRoundedRect] to build the region from a [BorderRadius].
   ///
-  /// On Wayland the call requires KWin with the blur effect enabled.
-  /// On X11 the property is set unconditionally; non-KDE WMs ignore it.
+  /// The call requires a compositor that advertises the blur capability (or the
+  /// legacy KWin blur effect for the fallback protocol). Under an X11 session or
+  /// a compositor without blur support it throws.
   /// On non-Linux platforms this throws [UnsupportedError].
   static Future<void> enable({List<BlurRect>? region}) async {
     _ensureLinux();
@@ -58,14 +77,14 @@ class KwinBlur {
   static void _ensureLinux() {
     if (!Platform.isLinux) {
       throw UnsupportedError(
-        'kwin_blur is only supported on Linux (X11 or Wayland with KWin).',
+        'background_blur_linux is only supported on Linux (Wayland with KWin).',
       );
     }
   }
 
   static void _check(String? result) {
     if (result != null && result.startsWith('error:')) {
-      throw Exception('kwin_blur: $result');
+      throw Exception('background_blur_linux: $result');
     }
   }
 }
@@ -80,11 +99,10 @@ class KwinBlur {
 /// radii — [BorderRadius.circular], [BorderRadius.only], or any other Flutter
 /// constructor all work.
 ///
-/// **Coordinate space**
-/// - Wayland: pass **logical pixels** — do NOT multiply by `devicePixelRatio`.
-/// - X11: pass **physical pixels** — multiply by `devicePixelRatio`.
+/// **Coordinate space:** pass **logical pixels** (do NOT multiply by
+/// `devicePixelRatio`); this is the surface-local space KWin expects on Wayland.
 ///
-/// Example (Wayland, read size from the Flutter view):
+/// Example (read size from the Flutter view):
 /// ```dart
 /// final view = WidgetsBinding.instance.platformDispatcher.views.first;
 /// final logical = view.physicalSize / view.devicePixelRatio;
@@ -93,7 +111,7 @@ class KwinBlur {
 ///   logical.height.round(),
 ///   BorderRadius.circular(12),
 /// );
-/// await KwinBlur.enable(region: region);
+/// await BackgroundBlurLinux.enable(region: region);
 /// ```
 List<BlurRect> blurRegionForRoundedRect(
   int width,
@@ -125,14 +143,17 @@ List<BlurRect> blurRegionForRoundedRect(
 
   for (int y = 0; y < height; y++) {
     if (y < tlRy) lefts[y] = math.max(lefts[y], arcInset(y, tlRx, tlRy));
-    if (y < trRy)
+    if (y < trRy) {
       rights[y] = math.min(rights[y], width - arcInset(y, trRx, trRy));
+    }
 
     final yb = height - 1 - y;
-    if (y >= height - blRy)
+    if (y >= height - blRy) {
       lefts[y] = math.max(lefts[y], arcInset(yb, blRx, blRy));
-    if (y >= height - brRy)
+    }
+    if (y >= height - brRy) {
       rights[y] = math.min(rights[y], width - arcInset(yb, brRx, brRy));
+    }
   }
 
   final rects = <BlurRect>[];
@@ -220,10 +241,10 @@ class _RenderPunchHole extends RenderBox {
 
 /// Internal singleton that owns the complete set of active blur rectangles
 /// contributed by all [Blurred] widgets in the window. It coalesces every
-/// registration into a single [KwinBlur.enable] call so multiple [Blurred]
+/// registration into a single [BackgroundBlurLinux.enable] call so multiple [Blurred]
 /// widgets can coexist without overwriting each other.
 ///
-/// Direct calls to [KwinBlur.enable] / [KwinBlur.disable] while [Blurred]
+/// Direct calls to [BackgroundBlurLinux.enable] / [BackgroundBlurLinux.disable] while [Blurred]
 /// widgets are mounted will override the managed region.
 class _BlurManager {
   _BlurManager._();
@@ -233,6 +254,10 @@ class _BlurManager {
   final Map<_BlurredState, List<BlurRect>> _regions = {};
 
   void update(_BlurredState owner, List<BlurRect> rects) {
+    // Skip the platform round-trip when nothing actually moved. This matters
+    // because region updates are driven per scroll tick, which fires every
+    // frame during a fling.
+    if (listEquals(_regions[owner], rects)) return;
     _regions[owner] = rects;
     _apply();
   }
@@ -244,9 +269,9 @@ class _BlurManager {
   void _apply() {
     final all = _regions.values.expand((r) => r).toList();
     if (all.isEmpty) {
-      KwinBlur.disable().catchError((_) {});
+      BackgroundBlurLinux.disable().catchError((_) {});
     } else {
-      KwinBlur.enable(region: all).catchError((_) {});
+      BackgroundBlurLinux.enable(region: all).catchError((_) {});
     }
   }
 }
@@ -255,7 +280,7 @@ class _BlurManager {
 /// in the window.
 ///
 /// Each [Blurred] widget registers its own region with a shared [_BlurManager];
-/// all active [Blurred] widgets are composited into a single [KwinBlur.enable]
+/// all active [Blurred] widgets are composited into a single [BackgroundBlurLinux.enable]
 /// call, so multiple widgets can coexist freely.
 ///
 /// **Basic usage** (requires transparent [Scaffold]):
@@ -283,11 +308,10 @@ class _BlurManager {
 /// **Notes**
 /// - Only works on Linux with KWin. On other platforms the widget renders its
 ///   [child] normally with no side effects.
-/// - Position is measured via [RenderBox.localToGlobal] after each layout.
-///   The region does **not** update automatically when the widget scrolls
-///   inside a [ScrollView] — re-mount or call [KwinBlur.enable] manually if
-///   needed.
-/// - Using [KwinBlur.enable] / [KwinBlur.disable] directly while [Blurred]
+/// - Position is measured via [RenderBox.localToGlobal] after each layout, and
+///   the region tracks the widget as it scrolls inside a [ScrollView] (the
+///   nearest [Scrollable]'s position is observed).
+/// - Using [BackgroundBlurLinux.enable] / [BackgroundBlurLinux.disable] directly while [Blurred]
 ///   widgets are in the tree will override the managed region.
 class Blurred extends StatefulWidget {
   const Blurred({
@@ -337,10 +361,28 @@ class Blurred extends StatefulWidget {
 class _BlurredState extends State<Blurred> with WidgetsBindingObserver {
   static final _manager = _BlurManager.instance;
 
+  // The nearest enclosing scrollable's position, if any. We listen to it so the
+  // blur region follows the widget as it scrolls.
+  ScrollPosition? _scrollPosition;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _scheduleUpdate();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Re-resolve the enclosing scrollable; it (or its position) can change when
+    // the widget is moved in the tree.
+    final position = Scrollable.maybeOf(context)?.position;
+    if (position != _scrollPosition) {
+      _scrollPosition?.removeListener(_scheduleUpdate);
+      _scrollPosition = position;
+      _scrollPosition?.addListener(_scheduleUpdate);
+    }
     _scheduleUpdate();
   }
 
@@ -362,6 +404,7 @@ class _BlurredState extends State<Blurred> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _scrollPosition?.removeListener(_scheduleUpdate);
     WidgetsBinding.instance.removeObserver(this);
     _manager.remove(this);
     super.dispose();
@@ -379,8 +422,8 @@ class _BlurredState extends State<Blurred> with WidgetsBindingObserver {
     if (box == null || !box.hasSize) return;
 
     // localToGlobal gives the offset in Flutter logical pixels from the
-    // top-left of the Flutter view — the coordinate space KWin expects on
-    // Wayland (surface-local). On X11 multiply by devicePixelRatio.
+    // top-left of the Flutter view — the surface-local coordinate space KWin
+    // expects on Wayland.
     final offset = box.localToGlobal(Offset.zero);
     final size = box.size;
     final m = widget.expand;
