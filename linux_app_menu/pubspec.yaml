@@ -3,6 +3,8 @@ description: "Exports Flutter PlatformMenuBar menus to KDE Plasma on Wayland."
 version: 0.0.1
 repository: https://github.com/Luwx/klutter/tree/main/linux_app_menu
 
+resolution: workspace
+
 environment:
   sdk: ^3.12.2
   flutter: '>=3.3.0'

@@ -2,6 +2,8 @@ name: kde_color_scheme
 description: "Reads KDE Plasma color schemes from kdeglobals and streams real-time updates via inotify."
 version: 0.1.0
 
+resolution: workspace
+
 environment:
   sdk: ^3.11.0
   flutter: '>=3.3.0'

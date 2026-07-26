@@ -3,6 +3,8 @@ description: "Flutter plugin that enables the KWin compositor background blur ef
 version: 0.0.2
 homepage:
 
+resolution: workspace
+
 environment:
   sdk: ^3.12.0
   flutter: '>=3.3.0'
