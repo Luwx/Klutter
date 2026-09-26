@@ -421,16 +421,20 @@ class _BlurredState extends State<Blurred> with WidgetsBindingObserver {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
 
-    // localToGlobal gives the offset in Flutter logical pixels from the
-    // top-left of the Flutter view — the surface-local coordinate space KWin
-    // expects on Wayland.
+    final view = View.of(context);
+    final renderView = WidgetsBinding.instance.renderViews.firstWhere(
+      (renderView) => renderView.flutterView == view,
+    );
+    // KWin expects surface coordinates, before any app-level view scaling.
+    final scale =
+        renderView.configuration.devicePixelRatio / view.devicePixelRatio;
     final offset = box.localToGlobal(Offset.zero);
     final size = box.size;
     final m = widget.expand;
-    final x = (offset.dx - m.left).round();
-    final y = (offset.dy - m.top).round();
-    final w = (size.width + m.left + m.right).round();
-    final h = (size.height + m.top + m.bottom).round();
+    final x = ((offset.dx - m.left) * scale).round();
+    final y = ((offset.dy - m.top) * scale).round();
+    final w = ((size.width + m.left + m.right) * scale).round();
+    final h = ((size.height + m.top + m.bottom) * scale).round();
 
     if (w <= 0 || h <= 0) return;
 
@@ -439,7 +443,7 @@ class _BlurredState extends State<Blurred> with WidgetsBindingObserver {
       rects = blurRegionForRoundedRect(
         w,
         h,
-        widget.borderRadius!,
+        widget.borderRadius! * scale,
       ).map((r) => BlurRect(r.x + x, r.y + y, r.width, r.height)).toList();
     } else {
       rects = [BlurRect(x, y, w, h)];
