@@ -1,5 +1,5 @@
-name: background_blur_linux_example
-description: "Demonstrates how to use the background_blur_linux plugin."
+name: linux_app_menu_example
+description: "Demonstrates how to use the linux_app_menu plugin."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -7,7 +7,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 resolution: workspace
 
 environment:
-  sdk: ^3.12.0
+  sdk: ^3.12.2
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -19,9 +19,9 @@ dependencies:
   flutter:
     sdk: flutter
 
-  background_blur_linux:
+  linux_app_menu:
     # When depending on this package from a real application you should use:
-    #   background_blur_linux: ^x.y.z
+    #   linux_app_menu: ^x.y.z
     # See https://dart.dev/tools/pub/dependencies#version-constraints
     # The example app is bundled with the plugin so we use a path dependency on
     # the parent directory to use the current plugin's version.
@@ -32,8 +32,6 @@ dependencies:
   cupertino_icons: ^1.0.8
 
 dev_dependencies:
-  integration_test:
-    sdk: flutter
   flutter_test:
     sdk: flutter
 

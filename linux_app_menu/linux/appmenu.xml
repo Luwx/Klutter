@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="appmenu">
+  <copyright><![CDATA[
+    SPDX-FileCopyrightText: 2017 David Edmundson
+    SPDX-License-Identifier: LGPL-2.1-or-later
+  ]]></copyright>
+  <interface name="org_kde_kwin_appmenu_manager" version="1">
+    <description summary="appmenu dbus address interface">
+      Links a Wayland surface to a com.canonical.dbusmenu interface.
+    </description>
+    <request name="create">
+      <arg name="id" type="new_id" interface="org_kde_kwin_appmenu"/>
+      <arg name="surface" type="object" interface="wl_surface"/>
+    </request>
+  </interface>
+  <interface name="org_kde_kwin_appmenu" version="1">
+    <description summary="appmenu dbus address interface">
+      The D-Bus service name and object path where the appmenu is exported.
+    </description>
+    <request name="set_address">
+      <arg name="service_name" type="string"/>
+      <arg name="object_path" type="string"/>
+    </request>
+    <request name="release" type="destructor"/>
+  </interface>
+</protocol>

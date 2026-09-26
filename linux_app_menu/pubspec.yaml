@@ -1,15 +1,16 @@
-name: background_blur_linux
-description: "Flutter plugin that enables the KWin compositor background blur effect on Linux (Wayland)."
-version: 0.0.2
-homepage:
+name: linux_app_menu
+description: "Exports Flutter PlatformMenuBar menus to KDE Plasma on Wayland."
+version: 0.0.1
+repository: https://github.com/Luwx/klutter/tree/main/linux_app_menu
 
 resolution: workspace
 
 environment:
-  sdk: ^3.12.0
+  sdk: ^3.12.2
   flutter: '>=3.3.0'
 
 dependencies:
+  dbus: ^0.7.14
   flutter:
     sdk: flutter
 
@@ -36,7 +37,7 @@ flutter:
   plugin:
     platforms:
       linux:
-        pluginClass: BackgroundBlurLinuxPlugin
+        pluginClass: LinuxAppMenuPlugin
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:

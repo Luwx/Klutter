@@ -1,0 +1,13 @@
+name: klutter_workspace
+description: Flutter packages for KDE Plasma and Linux desktop integration.
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+workspace:
+  - background_blur_linux
+  - background_blur_linux/example
+  - kde_color_scheme
+  - linux_app_menu
+  - linux_app_menu/example
