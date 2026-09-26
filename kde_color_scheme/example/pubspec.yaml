@@ -1,0 +1,22 @@
+name: kde_color_scheme_example
+description: "Demonstrates how to use the kde_color_scheme plugin."
+publish_to: 'none'
+
+resolution: workspace
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  kde_color_scheme:
+    path: ../
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

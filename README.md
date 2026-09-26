@@ -7,7 +7,7 @@ Flutter packages for KDE Plasma and Linux desktop integration.
 | Package | Description |
 | --- | --- |
 | [background_blur_linux](background_blur_linux/) | Enables KWin background blur for Flutter windows on Wayland. |
-| [kde_color_scheme](kde_color_scheme/) | Reads KDE color settings and watches for changes. |
+| [kde_color_scheme](kde_color_scheme/) | Reads KDE color settings, watches for changes, and sets KWin title bar colors. |
 | [linux_app_menu](linux_app_menu/) | Exports Flutter menus to KDE's Global Menu on Wayland. |
 
 ## Development

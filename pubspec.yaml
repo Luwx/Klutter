@@ -9,5 +9,6 @@ workspace:
   - background_blur_linux
   - background_blur_linux/example
   - kde_color_scheme
+  - kde_color_scheme/example
   - linux_app_menu
   - linux_app_menu/example

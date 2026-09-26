@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/painting.dart';
 
+import 'kconfig.dart';
 import 'kde_color_effect.dart';
 import 'kde_color_scheme.dart';
 import 'kde_color_set.dart';
@@ -36,9 +37,22 @@ import 'kde_wm_colors.dart';
 class KdeglobalsParser {
   const KdeglobalsParser._();
 
-  static String get defaultPath {
-    final home = Platform.environment['HOME'] ?? '';
-    return '$home/.config/kdeglobals';
+  static String get defaultPath => defaultPathFor(Platform.environment);
+
+  /// The user's kdeglobals for the given environment variables.
+  ///
+  /// Uses `$XDG_CONFIG_HOME/kdeglobals` when it exists. Otherwise, and inside
+  /// Flatpak, where `XDG_CONFIG_HOME` points into the sandbox and KDE runtimes
+  /// expose the host file instead, uses `~/.config/kdeglobals`.
+  static String defaultPathFor(Map<String, String> environment) {
+    final configHome = environment['XDG_CONFIG_HOME'];
+    if (configHome != null && configHome.isNotEmpty) {
+      final path = '$configHome/kdeglobals';
+      if (File(path).existsSync()) {
+        return path;
+      }
+    }
+    return '${environment['HOME'] ?? ''}/.config/kdeglobals';
   }
 
   /// Returns true if kdeglobals exists at [path] (defaults to [defaultPath]).
@@ -59,27 +73,7 @@ class KdeglobalsParser {
   }
 
   static KdeColorScheme _parseContent(String content) {
-    final sections = <String, Map<String, String>>{};
-    String? current;
-
-    for (var line in content.split('\n')) {
-      line = line.trim();
-      if (line.isEmpty || line.startsWith('#') || line.startsWith(';')) {
-        continue;
-      }
-
-      if (line.startsWith('[') && line.endsWith(']')) {
-        current = line.substring(1, line.length - 1);
-        sections[current] = {};
-      } else if (current != null) {
-        final eq = line.indexOf('=');
-        if (eq > 0) {
-          sections[current]![line.substring(0, eq).trim()] = line
-              .substring(eq + 1)
-              .trim();
-        }
-      }
-    }
+    final sections = parseKConfigGroups(content);
 
     final general = sections['General'] ?? {};
     final kde = sections['KDE'] ?? {};
