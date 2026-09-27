@@ -1,9 +1,12 @@
+import 'dart:ffi' as ffi;
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
+import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+
+import 'src/background_blur_linux_bindings_generated.dart' as bindings;
 
 /// A rectangle (in window-local pixels) to mark as blurred.
 class BlurRect {
@@ -13,8 +16,6 @@ class BlurRect {
   final int height;
 
   const BlurRect(this.x, this.y, this.width, this.height);
-
-  Map<String, int> _toMap() => {'x': x, 'y': y, 'w': width, 'h': height};
 
   @override
   bool operator ==(Object other) =>
@@ -26,6 +27,38 @@ class BlurRect {
 
   @override
   int get hashCode => Object.hash(x, y, width, height);
+
+  @override
+  String toString() => 'BlurRect($x, $y, $width, $height)';
+}
+
+/// The native calls behind [BackgroundBlurLinux]. Each returns `ok` or
+/// `error:<code>`.
+///
+/// Replace [BackgroundBlurLinux.native] in tests to record the requests.
+@visibleForTesting
+class BlurNative {
+  const BlurNative();
+
+  String enable(List<BlurRect> region) => using((arena) {
+    ffi.Pointer<bindings.BackgroundBlurLinuxRect> rects = ffi.nullptr;
+    if (region.isNotEmpty) {
+      rects = arena<bindings.BackgroundBlurLinuxRect>(region.length);
+      for (var i = 0; i < region.length; i++) {
+        rects[i]
+          ..x = region[i].x
+          ..y = region[i].y
+          ..width = region[i].width
+          ..height = region[i].height;
+      }
+    }
+    return _string(bindings.background_blur_linux_enable(rects, region.length));
+  });
+
+  String disable() => _string(bindings.background_blur_linux_disable());
+
+  static String _string(ffi.Pointer<ffi.Char> result) =>
+      result.cast<Utf8>().toDartString();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,7 +75,9 @@ class BlurRect {
 /// The window must already be transparent for blur to be visible.
 /// This plugin only requests the blur region; it does not change window opacity.
 class BackgroundBlurLinux {
-  static const MethodChannel _channel = MethodChannel('background_blur_linux');
+  /// The native implementation; replaceable in tests.
+  @visibleForTesting
+  static BlurNative native = const BlurNative();
 
   /// Enables blur for the application window.
   ///
@@ -60,18 +95,13 @@ class BackgroundBlurLinux {
   /// On non-Linux platforms this throws [UnsupportedError].
   static Future<void> enable({List<BlurRect>? region}) async {
     _ensureLinux();
-    final rects = (region ?? const <BlurRect>[])
-        .map((r) => r._toMap())
-        .toList();
-    final result = await _channel.invokeMethod<String>('enable', rects);
-    _check(result);
+    _check(native.enable(region ?? const <BlurRect>[]));
   }
 
   /// Disables KWin blur for the application window.
   static Future<void> disable() async {
     _ensureLinux();
-    final result = await _channel.invokeMethod<String>('disable');
-    _check(result);
+    _check(native.disable());
   }
 
   static void _ensureLinux() {
@@ -82,8 +112,8 @@ class BackgroundBlurLinux {
     }
   }
 
-  static void _check(String? result) {
-    if (result != null && result.startsWith('error:')) {
+  static void _check(String result) {
+    if (result.startsWith('error:')) {
       throw Exception('background_blur_linux: $result');
     }
   }

@@ -25,6 +25,15 @@ List the workspace packages:
 dart pub workspace list
 ```
 
+Packages with native code (`background_blur_linux`, `kde_color_scheme`,
+`linux_app_menu`) are FFI packages: a build hook in `hook/build.dart` compiles
+`src/` when an app is built. After changing a header in `src/`, regenerate the
+Dart bindings from the package directory:
+
+```sh
+dart run ffigen --config ffigen.yaml
+```
+
 Run package commands from its directory:
 
 ```sh

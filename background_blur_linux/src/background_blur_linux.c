@@ -1,7 +1,8 @@
-#include "background_blur_linux_private.h"
+#include "background_blur_linux.h"
 
 #include <gdk/gdk.h>
 #include <gdk/gdkwayland.h>
+#include <gtk/gtk.h>
 #include <glib.h>
 #include <string.h>
 #include <wayland-client.h>
@@ -10,7 +11,7 @@
 #include "ext-background-effect-v1-protocol.h"
 
 /*
- * Wayland backend for the background_blur_linux plugin.
+ * Wayland backend for the background_blur_linux package.
  *
  * Protocol selection:
  *   - We prefer the standardized ext_background_effect_v1 protocol, which KWin
@@ -196,27 +197,73 @@ static struct wl_region* build_region(struct wl_compositor* wl_comp,
   return region;
 }
 
-char* background_blur_linux_wayland_enable(GtkWindow* window,
-                              const BackgroundBlurLinuxRect* rects,
-                              size_t n_rects) {
+// Flutter's GTK window: the toplevel that contains the FlView. The type is
+// looked up by name so the library does not link against the Flutter engine.
+static gboolean contains_widget_of_type(GtkWidget* widget, GType type) {
+  if (G_TYPE_CHECK_INSTANCE_TYPE(widget, type)) {
+    return TRUE;
+  }
+  if (!GTK_IS_CONTAINER(widget)) {
+    return FALSE;
+  }
+  GList* children = gtk_container_get_children(GTK_CONTAINER(widget));
+  gboolean found = FALSE;
+  for (GList* l = children; l != NULL && !found; l = l->next) {
+    found = contains_widget_of_type(GTK_WIDGET(l->data), type);
+  }
+  g_list_free(children);
+  return found;
+}
+
+static GtkWindow* find_flutter_window(void) {
+  GType view_type = g_type_from_name("FlView");
+  if (view_type == 0) {
+    return NULL;
+  }
+  GList* windows = gtk_window_list_toplevels();
+  GtkWindow* found = NULL;
+  for (GList* l = windows; l != NULL && found == NULL; l = l->next) {
+    if (contains_widget_of_type(GTK_WIDGET(l->data), view_type)) {
+      found = GTK_WINDOW(l->data);
+    }
+  }
+  g_list_free(windows);
+  return found;
+}
+
+// GTK is not thread safe. Flutter runs Dart on the GTK main thread unless the
+// app opts into a separate UI thread.
+static gboolean on_main_thread(void) {
+  return g_main_context_is_owner(g_main_context_default());
+}
+
+const char* background_blur_linux_enable(const BackgroundBlurLinuxRect* rects,
+                                         size_t n_rects) {
+  if (!on_main_thread()) {
+    return "error:not_main_thread";
+  }
+  GtkWindow* window = find_flutter_window();
+  if (window == NULL) {
+    return "error:no_native_window";
+  }
   GdkDisplay* gdk_display = gdk_display_get_default();
   if (gdk_display == NULL || !GDK_IS_WAYLAND_DISPLAY(gdk_display)) {
-    return g_strdup("error:not_wayland");
+    return "error:not_wayland";
   }
   if (!ensure_initialized(gdk_display)) {
-    return g_strdup("error:blur_manager_not_available");
+    return "error:blur_manager_not_available";
   }
 
   struct wl_surface* surface = surface_for_window(window);
   if (surface == NULL) {
-    return g_strdup("error:no_native_window");
+    return "error:no_native_window";
   }
 
   struct wl_display* wl_disp = gdk_wayland_display_get_wl_display(gdk_display);
   struct wl_compositor* wl_comp =
       gdk_wayland_display_get_wl_compositor(gdk_display);
   if (wl_disp == NULL || wl_comp == NULL) {
-    return g_strdup("error:no_compositor");
+    return "error:no_compositor";
   }
 
   release_active_blur();
@@ -227,7 +274,7 @@ char* background_blur_linux_wayland_enable(GtkWindow* window,
         ext_background_effect_manager_v1_get_background_effect(g_ext_manager,
                                                               surface);
     if (g_ext_active == NULL) {
-      return g_strdup("error:blur_create_failed");
+      return "error:blur_create_failed";
     }
     // Unlike org_kde_kwin_blur, a NULL region here *removes* the effect rather
     // than meaning "whole window". For whole-window blur we set an oversized
@@ -238,7 +285,7 @@ char* background_blur_linux_wayland_enable(GtkWindow* window,
                      : build_region(wl_comp, rects, n_rects);
     if (region == NULL) {
       release_active_blur();
-      return g_strdup("error:region_create_failed");
+      return "error:region_create_failed";
     }
     ext_background_effect_surface_v1_set_blur_region(g_ext_active, region);
     wl_region_destroy(region);
@@ -247,7 +294,7 @@ char* background_blur_linux_wayland_enable(GtkWindow* window,
     // Fallback path: org_kde_kwin_blur.
     g_kde_active = org_kde_kwin_blur_manager_create(g_kde_manager, surface);
     if (g_kde_active == NULL) {
-      return g_strdup("error:blur_create_failed");
+      return "error:blur_create_failed";
     }
     if (n_rects == 0) {
       org_kde_kwin_blur_set_region(g_kde_active, NULL);
@@ -255,7 +302,7 @@ char* background_blur_linux_wayland_enable(GtkWindow* window,
       struct wl_region* region = build_region(wl_comp, rects, n_rects);
       if (region == NULL) {
         release_active_blur();
-        return g_strdup("error:region_create_failed");
+        return "error:region_create_failed";
       }
       org_kde_kwin_blur_set_region(g_kde_active, region);
       wl_region_destroy(region);
@@ -265,25 +312,33 @@ char* background_blur_linux_wayland_enable(GtkWindow* window,
 
   wl_surface_commit(surface);
   wl_display_flush(wl_disp);
-  return g_strdup("ok");
+  return "ok";
 }
 
-char* background_blur_linux_wayland_disable(GtkWindow* window) {
+const char* background_blur_linux_disable(void) {
+  if (!on_main_thread()) {
+    return "error:not_main_thread";
+  }
+  GtkWindow* window = find_flutter_window();
+  if (window == NULL) {
+    release_active_blur();
+    return "error:no_native_window";
+  }
   GdkDisplay* gdk_display = gdk_display_get_default();
   if (gdk_display == NULL || !GDK_IS_WAYLAND_DISPLAY(gdk_display)) {
-    return g_strdup("error:not_wayland");
+    return "error:not_wayland";
   }
   // Even if init previously failed (no manager), there is nothing to undo —
   // report success so callers can call disable() unconditionally.
   if (!ensure_initialized(gdk_display)) {
     release_active_blur();
-    return g_strdup("ok");
+    return "ok";
   }
 
   struct wl_surface* surface = surface_for_window(window);
   if (surface == NULL) {
     release_active_blur();
-    return g_strdup("error:no_native_window");
+    return "error:no_native_window";
   }
 
   // For ext, set_blur_region(NULL) clears the effect and destroy() drops the
@@ -303,5 +358,5 @@ char* background_blur_linux_wayland_disable(GtkWindow* window) {
   if (wl_disp != NULL) {
     wl_display_flush(wl_disp);
   }
-  return g_strdup("ok");
+  return "ok";
 }

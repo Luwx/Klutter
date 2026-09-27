@@ -124,6 +124,20 @@ instances are not visible, so their leftovers are only removed at logout.
 
 See [`example/`](example/) for a runnable test application.
 
+## Building
+
+`KdeTitlebar`'s native library is compiled by a Dart build hook when the app is built. It
+needs a C compiler (Flutter's Linux toolchain already provides one),
+`pkg-config`, `wayland-scanner`, and the GTK 3 and Wayland development
+packages:
+
+- Fedora: `sudo dnf install gtk3-devel wayland-devel pkgconf-pkg-config`
+- Debian/Ubuntu: `sudo apt install libgtk-3-dev libwayland-dev pkg-config`
+
+The native functions look up the Flutter window themselves and must run on the
+GTK main thread, which is where Flutter runs Dart by default. Apps that opt
+into a separate UI thread get `error:not_main_thread`.
+
 ## Main types
 
 - `KdeColorScheme`

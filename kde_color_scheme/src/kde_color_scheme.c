@@ -1,6 +1,7 @@
-#include "kde_color_scheme_wayland.h"
+#include "kde_color_scheme.h"
 
 #include <gdk/gdkwayland.h>
+#include <gtk/gtk.h>
 #include <string.h>
 #include <wayland-client.h>
 
@@ -139,7 +140,50 @@ static void track_window(GtkWindow* window) {
                                          G_CALLBACK(window_mapped), NULL);
 }
 
-void kde_color_scheme_wayland_reset(void) {
+// Flutter's GTK window: the toplevel that contains the FlView. The type is
+// looked up by name so the library does not link against the Flutter engine.
+static gboolean contains_widget_of_type(GtkWidget* widget, GType type) {
+  if (G_TYPE_CHECK_INSTANCE_TYPE(widget, type)) {
+    return TRUE;
+  }
+  if (!GTK_IS_CONTAINER(widget)) {
+    return FALSE;
+  }
+  GList* children = gtk_container_get_children(GTK_CONTAINER(widget));
+  gboolean found = FALSE;
+  for (GList* l = children; l != NULL && !found; l = l->next) {
+    found = contains_widget_of_type(GTK_WIDGET(l->data), type);
+  }
+  g_list_free(children);
+  return found;
+}
+
+static GtkWindow* find_flutter_window(void) {
+  GType view_type = g_type_from_name("FlView");
+  if (view_type == 0) {
+    return NULL;
+  }
+  GList* windows = gtk_window_list_toplevels();
+  GtkWindow* found = NULL;
+  for (GList* l = windows; l != NULL && found == NULL; l = l->next) {
+    if (contains_widget_of_type(GTK_WIDGET(l->data), view_type)) {
+      found = GTK_WINDOW(l->data);
+    }
+  }
+  g_list_free(windows);
+  return found;
+}
+
+// GTK is not thread safe. Flutter runs Dart on the GTK main thread unless the
+// app opts into a separate UI thread.
+static gboolean on_main_thread(void) {
+  return g_main_context_is_owner(g_main_context_default());
+}
+
+const char* kde_color_scheme_reset_palette(void) {
+  if (!on_main_thread()) {
+    return "error:not_main_thread";
+  }
   release_palette();
   g_clear_pointer(&g_path, g_free);
   if (g_window != NULL) {
@@ -148,16 +192,23 @@ void kde_color_scheme_wayland_reset(void) {
       wl_display_flush(gdk_wayland_display_get_wl_display(display));
     }
   }
+  return "ok";
 }
 
-gchar* kde_color_scheme_wayland_set_palette(GtkWindow* window,
-                                            const gchar* path) {
+const char* kde_color_scheme_set_palette(const char* path) {
+  if (!on_main_thread()) {
+    return "error:not_main_thread";
+  }
+  GtkWindow* window = find_flutter_window();
+  if (window == NULL) {
+    return "error:no_native_window";
+  }
   GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(window));
   if (!GDK_IS_WAYLAND_DISPLAY(display)) {
-    return g_strdup("error:not_wayland");
+    return "error:not_wayland";
   }
   if (!ensure_initialized(display)) {
-    return g_strdup("error:palette_manager_not_available");
+    return "error:palette_manager_not_available";
   }
 
   g_free(g_path);
@@ -166,7 +217,7 @@ gchar* kde_color_scheme_wayland_set_palette(GtkWindow* window,
 
   // An unmapped window has no surface yet; the map handler applies the path.
   if (window_surface(window) != NULL && !apply_palette(window)) {
-    return g_strdup("error:palette_create_failed");
+    return "error:palette_create_failed";
   }
-  return g_strdup("ok");
+  return "ok";
 }

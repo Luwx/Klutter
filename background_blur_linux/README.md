@@ -1,16 +1,25 @@
 # background_blur_linux
 
-A Flutter plugin that adds blur effect to the Linux app window. Wayland only.
+A Flutter package that adds blur effect to the Linux app window. Wayland only.
 
 ## Requirements
 
 - "Background Blur" effect enabled in System Settings > Desktop Effects
-- Flutter >= 3.3
+- A Flutter SDK with Dart 3.12 or newer
 
-Build dependencies:
+### Building
 
-Fedora: `sudo dnf install wayland-devel gtk3-devel`  
-Debian/Ubuntu: `sudo apt install libwayland-dev libgtk-3-dev`
+The native library is compiled by a Dart build hook when the app is built. It
+needs a C compiler (Flutter's Linux toolchain already provides one),
+`pkg-config`, `wayland-scanner`, and the GTK 3 and Wayland development
+packages:
+
+- Fedora: `sudo dnf install gtk3-devel wayland-devel pkgconf-pkg-config`
+- Debian/Ubuntu: `sudo apt install libgtk-3-dev libwayland-dev pkg-config`
+
+The native functions look up the Flutter window themselves and must run on the
+GTK main thread, which is where Flutter runs Dart by default. Apps that opt
+into a separate UI thread get `error:not_main_thread`.
 
 ## Installation
 

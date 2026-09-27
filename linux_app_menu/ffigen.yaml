@@ -1,0 +1,18 @@
+# Run with `dart run ffigen --config ffigen.yaml`.
+name: LinuxAppMenuBindings
+description: |
+  Bindings for `src/linux_app_menu.h`.
+
+  Regenerate bindings with `dart run ffigen --config ffigen.yaml`. If libclang
+  cannot find its own headers (e.g. `stddef.h`), add
+  `--compiler-opts "-I/usr/lib/clang/<version>/include"`.
+output: 'lib/src/linux_app_menu_bindings_generated.dart'
+headers:
+  entry-points:
+    - 'src/linux_app_menu.h'
+  include-directives:
+    - 'src/linux_app_menu.h'
+ffi-native:
+comments:
+  style: any
+  length: full

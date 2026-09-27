@@ -1,6 +1,6 @@
 # background_blur_linux_example
 
-Demonstrates how to use the background_blur_linux plugin.
+Demonstrates how to use the background_blur_linux package.
 
 ## Getting Started
 

@@ -1,3 +1,10 @@
+## 0.1.0
+
+* Convert from a method channel plugin to an FFI package. The native code is
+  built by a Dart build hook and finds the Flutter window itself.
+* **Breaking:** remove `LinuxAppMenu.channel` and the `methodChannel`
+  parameter of `LinuxAppMenu.initialize`.
+
 ## 0.0.1
 
 * Export Flutter `PlatformMenuBar` menus through DBusMenu.

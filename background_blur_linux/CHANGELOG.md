@@ -1,3 +1,9 @@
+## 0.0.3
+
+* Convert from a method channel plugin to an FFI package. The native code is
+  built by a Dart build hook and finds the Flutter window itself. The public
+  API is unchanged.
+
 ## 0.0.2
 
 * Renamed the package from `kwin_blur` to `background_blur_linux`: the Wayland

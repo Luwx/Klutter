@@ -1,6 +1,5 @@
 import 'package:background_blur_linux/background_blur_linux.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -27,29 +26,39 @@ class ZoomTestBinding extends AutomatedTestWidgetsFlutterBinding {
   }
 }
 
+/// Records the requests instead of calling the compositor.
+class RecordingBlurNative extends BlurNative {
+  final calls = <(String, List<BlurRect>)>[];
+
+  @override
+  String enable(List<BlurRect> region) {
+    calls.add(('enable', region));
+    return 'ok';
+  }
+
+  @override
+  String disable() {
+    calls.add(('disable', const []));
+    return 'ok';
+  }
+}
+
 void main() {
   final binding = ZoomTestBinding();
-  const channel = MethodChannel('background_blur_linux');
-  final calls = <MethodCall>[];
+  final native = RecordingBlurNative();
+  final calls = native.calls;
 
   setUp(() {
     calls.clear();
-    binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
-      call,
-    ) async {
-      calls.add(call);
-      return 'ok';
-    });
+    BackgroundBlurLinux.native = native;
   });
 
   tearDown(() {
     binding.zoom = 1;
-    binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
+    BackgroundBlurLinux.native = const BlurNative();
   });
 
-  List<Map<Object?, Object?>> region() =>
-      (calls.lastWhere((call) => call.method == 'enable').arguments as List)
-          .cast<Map<Object?, Object?>>();
+  List<BlurRect> region() => calls.lastWhere((call) => call.$1 == 'enable').$2;
 
   testWidgets('blur regions follow render zoom independently of display DPI', (
     tester,
@@ -87,12 +96,12 @@ void main() {
         await tester.pump();
         await tester.idle();
         expect(region(), [
-          {
-            'x': (36 * zoom).round(),
-            'y': (28 * zoom).round(),
-            'w': (112 * zoom).round(),
-            'h': (68 * zoom).round(),
-          },
+          BlurRect(
+            (36 * zoom).round(),
+            (28 * zoom).round(),
+            (112 * zoom).round(),
+            (68 * zoom).round(),
+          ),
         ], reason: 'DPI $dpr, zoom $zoom');
       }
       await tester.pumpWidget(const SizedBox.shrink());
@@ -132,29 +141,26 @@ void main() {
         binding.zoom = zoom;
         await tester.pump();
         await tester.idle();
-        expect(region(), [
-          for (final rect in blurRegionForRoundedRect(
+        expect(
+          region(),
+          blurRegionForRoundedRect(
             (210 * zoom).round(),
             600,
             BorderRadius.circular(10 * zoom),
-          ))
-            {'x': rect.x, 'y': rect.y, 'w': rect.width, 'h': rect.height},
-        ], reason: 'zoom $zoom');
+          ),
+          reason: 'zoom $zoom',
+        );
       }
 
       tester.view.physicalSize = const Size(1600, 1600);
       await tester.pump();
       await tester.idle();
-      expect(region(), [
-        for (final rect in blurRegionForRoundedRect(
-          168,
-          800,
-          BorderRadius.circular(8),
-        ))
-          {'x': rect.x, 'y': rect.y, 'w': rect.width, 'h': rect.height},
-      ]);
+      expect(
+        region(),
+        blurRegionForRoundedRect(168, 800, BorderRadius.circular(8)),
+      );
       await tester.pumpWidget(const SizedBox.shrink());
-      expect(calls.last.method, 'disable');
+      expect(calls.last.$1, 'disable');
     },
   );
 }

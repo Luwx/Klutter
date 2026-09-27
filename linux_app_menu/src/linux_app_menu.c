@@ -1,6 +1,7 @@
-#include "linux_app_menu_wayland.h"
+#include "linux_app_menu.h"
 
 #include <gdk/gdkwayland.h>
+#include <gtk/gtk.h>
 #include <string.h>
 #include <wayland-client.h>
 
@@ -73,40 +74,93 @@ static gboolean ensure_initialized(GdkDisplay* gdk_display) {
   return TRUE;
 }
 
-void linux_app_menu_wayland_clear(void) {
+// Flutter's GTK window: the toplevel that contains the FlView. The type is
+// looked up by name so the library does not link against the Flutter engine.
+static gboolean contains_widget_of_type(GtkWidget* widget, GType type) {
+  if (G_TYPE_CHECK_INSTANCE_TYPE(widget, type)) {
+    return TRUE;
+  }
+  if (!GTK_IS_CONTAINER(widget)) {
+    return FALSE;
+  }
+  GList* children = gtk_container_get_children(GTK_CONTAINER(widget));
+  gboolean found = FALSE;
+  for (GList* l = children; l != NULL && !found; l = l->next) {
+    found = contains_widget_of_type(GTK_WIDGET(l->data), type);
+  }
+  g_list_free(children);
+  return found;
+}
+
+static GtkWindow* find_flutter_window(void) {
+  GType view_type = g_type_from_name("FlView");
+  if (view_type == 0) {
+    return NULL;
+  }
+  GList* windows = gtk_window_list_toplevels();
+  GtkWindow* found = NULL;
+  for (GList* l = windows; l != NULL && found == NULL; l = l->next) {
+    if (contains_widget_of_type(GTK_WIDGET(l->data), view_type)) {
+      found = GTK_WINDOW(l->data);
+    }
+  }
+  g_list_free(windows);
+  return found;
+}
+
+// GTK is not thread safe. Flutter runs Dart on the GTK main thread unless the
+// app opts into a separate UI thread.
+static gboolean on_main_thread(void) {
+  return g_main_context_is_owner(g_main_context_default());
+}
+
+static void release_appmenu(void) {
   if (g_appmenu != NULL) {
     org_kde_kwin_appmenu_release(g_appmenu);
     g_appmenu = NULL;
   }
 }
 
-gchar* linux_app_menu_wayland_set_address(GtkWindow* window,
-                                          const gchar* service_name,
-                                          const gchar* object_path) {
+const char* linux_app_menu_clear(void) {
+  if (!on_main_thread()) {
+    return "error:not_main_thread";
+  }
+  release_appmenu();
+  return "ok";
+}
+
+const char* linux_app_menu_set_address(const char* service_name,
+                                       const char* object_path) {
+  if (!on_main_thread()) {
+    return "error:not_main_thread";
+  }
+  GtkWindow* window = find_flutter_window();
+  if (window == NULL) {
+    return "error:no_native_window";
+  }
   GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(window));
   if (!GDK_IS_WAYLAND_DISPLAY(display)) {
-    return g_strdup("error:not_wayland");
+    return "error:not_wayland";
   }
   if (!ensure_initialized(display)) {
-    return g_strdup("error:appmenu_manager_not_available");
+    return "error:appmenu_manager_not_available";
   }
 
   GdkWindow* gdk_window = gtk_widget_get_window(GTK_WIDGET(window));
   if (gdk_window == NULL || !GDK_IS_WAYLAND_WINDOW(gdk_window)) {
-    return g_strdup("error:no_wayland_surface");
+    return "error:no_wayland_surface";
   }
-  struct wl_surface* surface =
-      gdk_wayland_window_get_wl_surface(gdk_window);
+  struct wl_surface* surface = gdk_wayland_window_get_wl_surface(gdk_window);
   if (surface == NULL) {
-    return g_strdup("error:no_wayland_surface");
+    return "error:no_wayland_surface";
   }
 
-  linux_app_menu_wayland_clear();
+  release_appmenu();
   g_appmenu = org_kde_kwin_appmenu_manager_create(g_manager, surface);
   if (g_appmenu == NULL) {
-    return g_strdup("error:appmenu_create_failed");
+    return "error:appmenu_create_failed";
   }
   org_kde_kwin_appmenu_set_address(g_appmenu, service_name, object_path);
   wl_display_flush(gdk_wayland_display_get_wl_display(display));
-  return g_strdup("ok");
+  return "ok";
 }

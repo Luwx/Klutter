@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'src/linux_app_menu_delegate.dart';
@@ -7,19 +6,12 @@ export 'src/menu_items.dart';
 
 /// Installs KDE Wayland support for Flutter's standard [PlatformMenuBar].
 abstract final class LinuxAppMenu {
-  /// The method channel shared by Dart and the native Wayland plugin.
-  static const MethodChannel channel = MethodChannel(
-    'dev.klutter/linux_app_menu',
-  );
-
   /// Installs the menu delegate used by [PlatformMenuBar].
   ///
   /// Call this after [WidgetsFlutterBinding.ensureInitialized] and before
   /// creating a [PlatformMenuBar].
-  static void initialize({MethodChannel? methodChannel}) {
-    WidgetsBinding.instance.platformMenuDelegate = LinuxAppMenuDelegate(
-      channel: methodChannel ?? channel,
-    );
+  static void initialize() {
+    WidgetsBinding.instance.platformMenuDelegate = LinuxAppMenuDelegate();
   }
 
   /// Whether this package can run on the current target platform.

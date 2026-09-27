@@ -1,14 +1,14 @@
 import 'dart:async';
 
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'app_menu_native.dart';
 import 'dbus_menu.dart';
 
 final class LinuxAppMenuDelegate extends PlatformMenuDelegate {
-  LinuxAppMenuDelegate({required this.channel});
+  LinuxAppMenuDelegate({this.native = const AppMenuNative()});
 
-  final MethodChannel channel;
+  final AppMenuNative native;
   final Map<int, PlatformMenuItem> _items = <int, PlatformMenuItem>{};
   late final DbusMenuHost _host = DbusMenuHost(onActivate: _activate);
 
@@ -48,10 +48,7 @@ final class LinuxAppMenuDelegate extends PlatformMenuDelegate {
       if (generation != _generation) {
         return;
       }
-      await channel.invokeMethod<void>('Menu.setAddress', <String, String>{
-        'serviceName': address.serviceName,
-        'objectPath': address.objectPath,
-      });
+      native.setAddress(address.serviceName, address.objectPath);
     } catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(
@@ -69,7 +66,7 @@ final class LinuxAppMenuDelegate extends PlatformMenuDelegate {
   Future<void> _clearNative(int generation) async {
     await _host.address;
     if (generation == _generation) {
-      await channel.invokeMethod<void>('Menu.clear');
+      native.clear();
     }
   }
 

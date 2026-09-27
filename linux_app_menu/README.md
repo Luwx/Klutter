@@ -53,7 +53,7 @@ delegate automatically.
 
 DBusMenu does not provide matching submenu close notifications, so
 `PlatformMenu.onOpen` and `PlatformMenu.onClose` are currently not called.
-The plugin does not render an in-window fallback menu.
+The package does not render an in-window fallback menu.
 
 ### Checkboxes, radio buttons, and enabled state
 
@@ -100,11 +100,25 @@ exported for display by the desktop shell.
 ## KDE notes
 
 Enable KDE's Global Menu widget or Application Menu decoration button. The
-plugin talks directly to the `org_kde_kwin_appmenu_manager` Wayland global and
+package talks directly to the `org_kde_kwin_appmenu_manager` Wayland global and
 exports `com.canonical.dbusmenu`, so `appmenu-gtk-module` is not required.
 
 The application must use server-side decorations if the Application Menu
 title-bar button is being tested. Do not install a `GtkHeaderBar` with
 `gtk_window_set_titlebar()`. The bundled example follows this setup.
+
+## Building
+
+The native library is compiled by a Dart build hook when the app is built. It
+needs a C compiler (Flutter's Linux toolchain already provides one),
+`pkg-config`, `wayland-scanner`, and the GTK 3 and Wayland development
+packages:
+
+- Fedora: `sudo dnf install gtk3-devel wayland-devel pkgconf-pkg-config`
+- Debian/Ubuntu: `sudo apt install libgtk-3-dev libwayland-dev pkg-config`
+
+The native functions look up the Flutter window themselves and must run on the
+GTK main thread, which is where Flutter runs Dart by default. Apps that opt
+into a separate UI thread get `error:not_main_thread`.
 
 See [`example/`](example/) for a runnable test application.

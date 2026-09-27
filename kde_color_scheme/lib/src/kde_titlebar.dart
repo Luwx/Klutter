@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:ffi';
 import 'dart:io';
 
+import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'color_scheme_store.dart';
+import 'kde_color_scheme_bindings_generated.dart' as bindings;
 import 'kdeglobals_parser.dart';
 import 'titlebar_color_scheme.dart';
 
@@ -14,11 +17,6 @@ import 'titlebar_color_scheme.dart';
 /// path of a KDE color scheme, so custom colors are written to a generated
 /// `.colors` file that KWin reads.
 abstract final class KdeTitlebar {
-  /// The method channel shared by Dart and the native Wayland plugin.
-  static const MethodChannel channel = MethodChannel(
-    'dev.klutter/kde_color_scheme',
-  );
-
   /// Error codes returned when the session cannot apply decoration palettes.
   static const Set<String> _unsupportedCodes = {
     'error:not_wayland',
@@ -67,7 +65,7 @@ abstract final class KdeTitlebar {
     if (!isSupported) {
       return;
     }
-    await channel.invokeMethod<void>('Palette.reset');
+    _check(bindings.kde_color_scheme_reset_palette());
     final current = _current;
     _current = null;
     if (current != null) {
@@ -95,8 +93,9 @@ abstract final class KdeTitlebar {
     }
 
     try {
-      await channel.invokeMethod<void>('Palette.set', <String, String>{
-        'path': file.path,
+      using((arena) {
+        final path = file.path.toNativeUtf8(allocator: arena);
+        _check(bindings.kde_color_scheme_set_palette(path.cast()));
       });
     } on PlatformException catch (error) {
       await _store.delete(file);
@@ -112,6 +111,17 @@ abstract final class KdeTitlebar {
       await _store.delete(previous);
     }
     return true;
+  }
+
+  /// Throws a [PlatformException] with the code of a native error result.
+  static void _check(Pointer<Char> result) {
+    final status = result.cast<Utf8>().toDartString();
+    if (status != 'ok') {
+      throw PlatformException(
+        code: status,
+        message: 'kde_color_scheme: $status',
+      );
+    }
   }
 
   static Future<String?> _readKdeglobals() async {
